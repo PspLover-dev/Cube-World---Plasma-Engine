@@ -2,7 +2,7 @@
 
 An OpenGL reimplementation of the **Plasma** UI/scene engine used by **Cube World**, plus a small test app that loads retail asset databases and renders `.cub` voxel models with a working UI.
 
-The original game used Direct3D 9 (`plasma::D3D9*`). This project replaces that backend with **OpenGL 3.3** (`plasma::OpenGL*`) while keeping class names and layout close to the decompiled `plasma::` sources in `classes/` and `CUBE WORLD CODE/`.
+The original game used Direct3D 9 (`plasma::D3D9*`). This project replaces that backend with **OpenGL 3.3** (`plasma::OpenGL*`) while keeping class names and layout close to the decompiled `plasma::` sources.
 
 ---
 
