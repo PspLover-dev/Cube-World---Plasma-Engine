@@ -61,8 +61,6 @@ Plasma/
   cube/                 Cube World asset + .cub format code
   shaders/              GLSL programs
   third_party/          sqlite3, stb_image, stb_truetype
-  classes/              Ghidra decompile reference (not linked)
-  tools/                Python helpers for PLX/DB probing
   data1.db, data3.db, gui.plx   Retail assets (not in repo)
 ```
 
