@@ -1,4 +1,4 @@
-# CW Player — Plasma OpenGL port (Cube World)
+# Plasma OpenGL port (Cube World)
 
 An OpenGL reimplementation of the **Plasma** UI/scene engine used by **Cube World**, plus a test viewer (`plasma_test.exe`) that loads retail asset databases, renders `.cub` voxel models, plays game audio, and exercises the UI stack.
 
@@ -124,8 +124,6 @@ CW Player/
     src/                    Implementations + .inc registry data
   shaders/                  GLSL programs
   third_party/              sqlite3, stb_image, stb_truetype, stb_vorbis
-  classes/                  Ghidra decompile reference (not linked)
-  tools/                    Python helpers (DB/PLX/registry extraction)
   data1.db … gui.plx        Retail assets (when copied from install)
   resource1.dat             Retail UI font (plain TTF renamed)
   resource2.dat               Retail script font (plain TTF renamed)
@@ -349,22 +347,6 @@ Headers are grouped in `cube/include/cube/All.hpp`. Compiled into the library bu
 | **Quest / text** | `QuestText`, `QuestTextNode`, `Speech` | Partial |
 | **World info** | `WorldInfo`, `WorldMap` | Partial (threaded loop incomplete) |
 | **Action poses** | `ActionConfig`, `AnimPose`, `PartKind` | Used by viewer for idle pose |
-
----
-
-## Tools (`tools/`)
-
-| Script | Purpose |
-|--------|---------|
-| `inspect_resource_dat.py` | Inspect `resource1.dat` / `resource2.dat` (TTF headers, tables, coverage) |
-| `build_registry_model_map.py` | Regenerate `RegistryModelOverrides.inc` |
-| `extract_world_registry.py` | Extract race registry from decompile |
-| `extract_world_items.py` / `extract_world_equip.py` | Extract item/equip registries |
-| `extract_action_config.py` | Extract animation pose blobs |
-| `probe_dbs.py` / `probe_models.py` | Probe DB keys and model availability |
-| `probe_registry_models.py` | Check registry → model coverage |
-| `compare_icons.py` | Compare icon sets |
-| `plx_stream_decoder.py`, `parse_plx.py`, … | PLX / GUI binary analysis |
 
 ---
 
