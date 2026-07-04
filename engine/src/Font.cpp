@@ -13,14 +13,17 @@ namespace {
 
 constexpr int kFirstChar = 32;
 constexpr int kCharCount = 224; // Latin-1 printable range 32..255
-constexpr float kPackPixelSize = 18.f;
+constexpr float kUiPackPixelSize = 18.f;
+constexpr float kScriptPackPixelSize = 22.f;
 
 struct TtfAtlas {
     std::vector<uint8_t> ttfData;
+    std::string sourcePath;
     Texture* texture{nullptr};
     stbtt_packedchar glyphs[kCharCount]{};
     int texW{0};
     int texH{0};
+    float packPixelSize{kUiPackPixelSize};
     float ascent{0.f};
     float lineHeight{16.f};
     float charWidth{9.f};
@@ -28,57 +31,74 @@ struct TtfAtlas {
     bool tried{false};
 };
 
-TtfAtlas g_ttfAtlas;
+struct FontLibrary {
+    std::string assetRoot;
+    TtfAtlas ui;
+    TtfAtlas script;
+};
 
-bool loadTtfBytes(std::vector<uint8_t>& out) {
-    static const char* const paths[] = {
-        "C:/Windows/Fonts/segoeui.ttf",
-        "C:/Windows/Fonts/arial.ttf",
-        "C:/Windows/Fonts/tahoma.ttf",
-        "/mingw64/share/fonts/TTF/DejaVuSans.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans.ttf",
-        nullptr,
-    };
-    for (const char* const* p = paths; *p; ++p) {
-        FILE* f = std::fopen(*p, "rb");
-        if (!f) {
-            continue;
-        }
-        std::fseek(f, 0, SEEK_END);
-        const long sz = std::ftell(f);
-        std::fseek(f, 0, SEEK_SET);
-        if (sz <= 0) {
-            std::fclose(f);
-            continue;
-        }
-        out.resize(static_cast<size_t>(sz));
-        if (std::fread(out.data(), 1, out.size(), f) != out.size()) {
-            std::fclose(f);
-            out.clear();
-            continue;
-        }
-        std::fclose(f);
-        return true;
-    }
-    return false;
-}
+FontLibrary g_fonts;
 
-bool ensureTtfAtlas(Engine& engine) {
-    if (g_ttfAtlas.ready) {
-        return true;
-    }
-    if (g_ttfAtlas.tried) {
+bool loadFontBytesFromPath(std::vector<uint8_t>& out, const std::string& path) {
+    FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f) {
         return false;
     }
-    g_ttfAtlas.tried = true;
+    std::fseek(f, 0, SEEK_END);
+    const long sz = std::ftell(f);
+    std::fseek(f, 0, SEEK_SET);
+    if (sz <= 0) {
+        std::fclose(f);
+        return false;
+    }
+    out.resize(static_cast<size_t>(sz));
+    if (std::fread(out.data(), 1, out.size(), f) != out.size()) {
+        std::fclose(f);
+        out.clear();
+        return false;
+    }
+    std::fclose(f);
+    return true;
+}
 
-    if (!loadTtfBytes(g_ttfAtlas.ttfData)) {
+TtfAtlas* atlasFor(RetailFontSlot slot) {
+    return slot == RetailFontSlot::Script ? &g_fonts.script : &g_fonts.ui;
+}
+
+const TtfAtlas& atlasRef(RetailFontSlot slot) {
+    return slot == RetailFontSlot::Script ? g_fonts.script : g_fonts.ui;
+}
+
+void resetAtlas(TtfAtlas& atlas) {
+    atlas.ttfData.clear();
+    atlas.texture = nullptr;
+    atlas.ready = false;
+    atlas.tried = false;
+    atlas.ascent = 0.f;
+    atlas.lineHeight = atlas.packPixelSize;
+    atlas.charWidth = atlas.packPixelSize * 0.55f;
+    std::memset(atlas.glyphs, 0, sizeof(atlas.glyphs));
+}
+
+bool ensureTtfAtlas(TtfAtlas& atlas, Engine& engine) {
+    if (atlas.ready) {
+        return true;
+    }
+    if (atlas.tried) {
+        return false;
+    }
+    atlas.tried = true;
+
+    if (atlas.ttfData.empty() && !atlas.sourcePath.empty()) {
+        loadFontBytesFromPath(atlas.ttfData, atlas.sourcePath);
+    }
+    if (atlas.ttfData.empty()) {
         return false;
     }
 
     stbtt_fontinfo info{};
-    if (!stbtt_InitFont(&info, g_ttfAtlas.ttfData.data(),
-                        stbtt_GetFontOffsetForIndex(g_ttfAtlas.ttfData.data(), 0))) {
+    if (!stbtt_InitFont(&info, atlas.ttfData.data(),
+                        stbtt_GetFontOffsetForIndex(atlas.ttfData.data(), 0))) {
         return false;
     }
 
@@ -86,12 +106,12 @@ bool ensureTtfAtlas(Engine& engine) {
     int descent = 0;
     int lineGap = 0;
     stbtt_GetFontVMetrics(&info, &ascent, &descent, &lineGap);
-    const float scale = stbtt_ScaleForPixelHeight(&info, kPackPixelSize);
-    g_ttfAtlas.ascent = scale * static_cast<float>(ascent);
-    g_ttfAtlas.lineHeight = scale * static_cast<float>(ascent - descent + lineGap);
-    g_ttfAtlas.charWidth = g_ttfAtlas.lineHeight * 0.55f;
+    const float scale = stbtt_ScaleForPixelHeight(&info, atlas.packPixelSize);
+    atlas.ascent = scale * static_cast<float>(ascent);
+    atlas.lineHeight = scale * static_cast<float>(ascent - descent + lineGap);
+    atlas.charWidth = atlas.lineHeight * 0.55f;
 
-    constexpr int kAtlasSize = 512;
+    constexpr int kAtlasSize = 1024;
     std::vector<uint8_t> alpha(static_cast<size_t>(kAtlasSize) * static_cast<size_t>(kAtlasSize), 0);
 
     stbtt_pack_context pack{};
@@ -99,8 +119,8 @@ bool ensureTtfAtlas(Engine& engine) {
         return false;
     }
     stbtt_PackSetOversampling(&pack, 2, 2);
-    const int packed = stbtt_PackFontRange(&pack, g_ttfAtlas.ttfData.data(), 0, kPackPixelSize, kFirstChar,
-                                           kCharCount, g_ttfAtlas.glyphs);
+    const int packed = stbtt_PackFontRange(&pack, atlas.ttfData.data(), 0, atlas.packPixelSize, kFirstChar,
+                                           kCharCount, atlas.glyphs);
     stbtt_PackEnd(&pack);
     if (!packed) {
         return false;
@@ -114,11 +134,11 @@ bool ensureTtfAtlas(Engine& engine) {
         rgba[static_cast<size_t>(i) * 4 + 3] = alpha[static_cast<size_t>(i)];
     }
 
-    g_ttfAtlas.texW = kAtlasSize;
-    g_ttfAtlas.texH = kAtlasSize;
-    g_ttfAtlas.texture = engine.createTexture(kAtlasSize, kAtlasSize, rgba.data(), true);
-    g_ttfAtlas.ready = g_ttfAtlas.texture != nullptr;
-    return g_ttfAtlas.ready;
+    atlas.texW = kAtlasSize;
+    atlas.texH = kAtlasSize;
+    atlas.texture = engine.createTexture(kAtlasSize, kAtlasSize, rgba.data(), true);
+    atlas.ready = atlas.texture != nullptr;
+    return atlas.ready;
 }
 
 int glyphIndexFor(wchar_t ch) {
@@ -131,21 +151,21 @@ int glyphIndexFor(wchar_t ch) {
     return static_cast<int>(ch) - kFirstChar;
 }
 
-void drawTtfText(Engine& engine, const std::wstring& text, float x, float y, float scale,
+void drawTtfText(TtfAtlas& atlas, Engine& engine, const std::wstring& text, float x, float y, float scale,
                  const Vec4& color, int screenW, int screenH) {
-    if (!ensureTtfAtlas(engine) || !g_ttfAtlas.texture) {
+    if (!ensureTtfAtlas(atlas, engine) || !atlas.texture) {
         return;
     }
 
     float penX = 0.f;
-    float penBaseline = g_ttfAtlas.ascent;
+    float penBaseline = atlas.ascent;
     float lineY = y;
 
     for (wchar_t ch : text) {
         if (ch == L'\n') {
             penX = 0.f;
-            penBaseline = g_ttfAtlas.ascent;
-            lineY += g_ttfAtlas.lineHeight * scale;
+            penBaseline = atlas.ascent;
+            lineY += atlas.lineHeight * scale;
             continue;
         }
 
@@ -155,8 +175,7 @@ void drawTtfText(Engine& engine, const std::wstring& text, float x, float y, flo
         }
 
         stbtt_aligned_quad quad{};
-        stbtt_GetPackedQuad(g_ttfAtlas.glyphs, g_ttfAtlas.texW, g_ttfAtlas.texH, gi, &penX,
-                            &penBaseline, &quad, 1);
+        stbtt_GetPackedQuad(atlas.glyphs, atlas.texW, atlas.texH, gi, &penX, &penBaseline, &quad, 1);
 
         const float gw = (quad.x1 - quad.x0) * scale;
         const float gh = (quad.y1 - quad.y0) * scale;
@@ -165,9 +184,8 @@ void drawTtfText(Engine& engine, const std::wstring& text, float x, float y, flo
         }
 
         Widget::Rect r{x + quad.x0 * scale, lineY + quad.y0 * scale, gw, gh};
-        // OpenGL texture V grows upward; stbtt packed V grows downward.
-        drawTexturedQuad(engine, r, screenW, screenH, g_ttfAtlas.texture, color, quad.s0, quad.t1,
-                         quad.s1, quad.t0);
+        drawTexturedQuad(engine, r, screenW, screenH, atlas.texture, color, quad.s0, quad.t1, quad.s1,
+                         quad.t0);
     }
 }
 
@@ -190,6 +208,39 @@ void drawSimpleText(Engine& engine, const std::wstring& text, float x, float y, 
 }
 
 } // namespace
+
+bool initRetailFonts(const std::string& assetRoot) {
+    g_fonts.assetRoot = assetRoot;
+    resetAtlas(g_fonts.ui);
+    resetAtlas(g_fonts.script);
+
+    g_fonts.ui.sourcePath = assetRoot + "/resource1.dat";
+    g_fonts.ui.packPixelSize = kUiPackPixelSize;
+    g_fonts.script.sourcePath = assetRoot + "/resource2.dat";
+    g_fonts.script.packPixelSize = kScriptPackPixelSize;
+
+    const bool uiLoaded = loadFontBytesFromPath(g_fonts.ui.ttfData, g_fonts.ui.sourcePath);
+    const bool scriptLoaded = loadFontBytesFromPath(g_fonts.script.ttfData, g_fonts.script.sourcePath);
+    return uiLoaded && scriptLoaded;
+}
+
+const std::string& retailFontRoot() {
+    return g_fonts.assetRoot;
+}
+
+bool retailFontsReady(RetailFontSlot slot) {
+    return !atlasRef(slot).ttfData.empty();
+}
+
+Font& uiFont() {
+    static PlasmaFont font(RetailFontSlot::Ui);
+    return font;
+}
+
+Font& scriptFont() {
+    static ScriptFont font;
+    return font;
+}
 
 PixelFont::PixelFont(Texture* atlas) : atlas_(atlas) {}
 
@@ -233,37 +284,63 @@ void PixelFont::drawText(Engine& engine, const std::wstring& text, float x, floa
     drawSimpleText(engine, text, x, y, charWidth_, lineHeight_, screenW, screenH, color);
 }
 
+PlasmaFont::PlasmaFont(RetailFontSlot slot) : slot_(slot) {}
+
 float PlasmaFont::lineHeight() const {
-    return g_ttfAtlas.ready ? g_ttfAtlas.lineHeight : 16.f;
+    const TtfAtlas& atlas = atlasRef(slot_);
+    return !atlas.ttfData.empty() ? atlas.lineHeight : 16.f;
 }
 
 float PlasmaFont::charWidth() const {
-    return g_ttfAtlas.ready ? g_ttfAtlas.charWidth : 9.f;
+    const TtfAtlas& atlas = atlasRef(slot_);
+    return !atlas.ttfData.empty() ? atlas.charWidth : 9.f;
 }
 
 void PlasmaFont::drawText(Engine& engine, const std::wstring& text, float x, float y, const Vec4& color,
                           int screenW, int screenH) {
-    if (ensureTtfAtlas(engine)) {
-        drawTtfText(engine, text, x, y, 1.f, color, screenW, screenH);
+    TtfAtlas* atlas = atlasFor(slot_);
+    if (atlas && !atlas->ttfData.empty()) {
+        drawTtfText(*atlas, engine, text, x, y, 1.f, color, screenW, screenH);
         return;
     }
     drawSimpleText(engine, text, x, y, charWidth(), lineHeight(), screenW, screenH, color);
 }
 
-ScalableFont::ScalableFont(float size) : size_(size) {}
+ScalableFont::ScalableFont(float size, RetailFontSlot slot) : size_(size), slot_(slot) {}
 
 void ScalableFont::drawText(Engine& engine, const std::wstring& text, float x, float y, const Vec4& color,
                             int screenW, int screenH) {
-    if (ensureTtfAtlas(engine)) {
-        const float scale = size_ / kPackPixelSize;
-        drawTtfText(engine, text, x, y, scale, color, screenW, screenH);
+    TtfAtlas* atlas = atlasFor(slot_);
+    if (atlas && !atlas->ttfData.empty()) {
+        const float basePack = atlas->packPixelSize > 0.f ? atlas->packPixelSize : kUiPackPixelSize;
+        const float scale = size_ / basePack;
+        drawTtfText(*atlas, engine, text, x, y, scale, color, screenW, screenH);
         return;
     }
     drawSimpleText(engine, text, x, y, size_ * 0.55f, size_, screenW, screenH, color);
 }
 
+ScriptFont::ScriptFont() = default;
+
+float ScriptFont::lineHeight() const {
+    return font_.lineHeight();
+}
+
+float ScriptFont::charWidth() const {
+    return font_.charWidth();
+}
+
+void ScriptFont::drawText(Engine& engine, const std::wstring& text, float x, float y, const Vec4& color,
+                          int screenW, int screenH) {
+    font_.drawText(engine, text, x, y, color, screenW, screenH);
+}
+
+bool FontEngine::init(const std::string& assetRoot) {
+    return initRetailFonts(assetRoot);
+}
+
 Font* FontEngine::load(const std::string& name, const uint8_t*, size_t) {
-    auto f = std::make_unique<PlasmaFont>();
+    auto f = std::make_unique<PlasmaFont>(RetailFontSlot::Ui);
     f->setName(name);
     Font* raw = f.get();
     fonts_[name] = std::move(f);
@@ -290,6 +367,18 @@ Font* FontEngine::defaultFont() {
         return f;
     }
     return load("default", nullptr, 0);
+}
+
+Font* FontEngine::scriptFont() {
+    Font* f = get("script");
+    if (f) {
+        return f;
+    }
+    auto font = std::make_unique<ScriptFont>();
+    font->setName("script");
+    Font* raw = font.get();
+    fonts_["script"] = std::move(font);
+    return raw;
 }
 
 } // namespace plasma

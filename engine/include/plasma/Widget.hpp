@@ -37,6 +37,7 @@ public:
     virtual void draw(Engine& engine, int screenW, int screenH);
     virtual void onClick(float x, float y);
     virtual void onDrag(float x, float y);
+    virtual bool onMouseWheel(float delta);
     virtual bool hitTest(float x, float y) const;
     virtual bool wantsDrag() const { return false; }
 
@@ -128,7 +129,7 @@ public:
     ListWidget();
     void draw(Engine& engine, int screenW, int screenH) override;
     void onClick(float x, float y) override;
-    bool onMouseWheel(float delta);
+    bool onMouseWheel(float delta) override;
 
     std::vector<std::string> items;
     int selected{0};
@@ -204,7 +205,7 @@ public:
 
     void draw(Engine& engine, int screenW, int screenH) override;
     void update(float dt) override;
-    bool onMouseWheel(float delta);
+    bool onMouseWheel(float delta) override;
 
 private:
     ListWidget* list_{nullptr};

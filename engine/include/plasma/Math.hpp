@@ -89,6 +89,18 @@ inline Mat4 rotationY(float angle) {
     return m;
 }
 
+// Rotation around +Z (Cube World ground normal; horizontal plane is XY).
+inline Mat4 rotationZ(float angle) {
+    Mat4 m = Mat4::identity();
+    const float c = std::cos(angle);
+    const float s = std::sin(angle);
+    m.m[0] = c;
+    m.m[1] = s;
+    m.m[4] = -s;
+    m.m[5] = c;
+    return m;
+}
+
 inline Mat4 multiply(const Mat4& a, const Mat4& b) {
     Mat4 out{};
     for (int col = 0; col < 4; ++col) {

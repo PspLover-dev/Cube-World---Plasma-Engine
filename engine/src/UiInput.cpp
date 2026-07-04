@@ -45,11 +45,8 @@ Widget* dragTargetAt(Widget* root, float x, float y) {
 bool dispatchWheel(Widget* root, float x, float y, float delta) {
     Widget* hit = widgetAt(root, x, y);
     for (Widget* node = hit; node; node = node->parent()) {
-        if (auto* bar = dynamic_cast<ScrollBar*>(node)) {
-            return bar->onMouseWheel(delta);
-        }
-        if (auto* list = dynamic_cast<ListWidget*>(node)) {
-            return list->onMouseWheel(delta);
+        if (node->onMouseWheel(delta)) {
+            return true;
         }
     }
     return false;

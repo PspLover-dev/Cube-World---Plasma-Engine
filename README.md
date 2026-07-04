@@ -1,31 +1,47 @@
-# Plasma — OpenGL port (Cube World)
+# CW Player — Plasma OpenGL port (Cube World)
 
-An OpenGL reimplementation of the **Plasma** UI/scene engine used by **Cube World**, plus a small test app that loads retail asset databases and renders `.cub` voxel models with a working UI.
+An OpenGL reimplementation of the **Plasma** UI/scene engine used by **Cube World**, plus a test viewer (`plasma_test.exe`) that loads retail asset databases, renders `.cub` voxel models, plays game audio, and exercises the UI stack.
 
-The original game used Direct3D 9 (`plasma::D3D9*`). This project replaces that backend with **OpenGL 3.3** (`plasma::OpenGL*`) while keeping class names and layout close to the decompiled `plasma::` sources.
+The original game used Direct3D 9 (`plasma::D3D9*`). This project replaces that backend with **OpenGL 3.3** (`plasma::OpenGL*`) while keeping class names and layout close to the decompiled `plasma::` / `cube::` sources in `classes/`.
 
 ---
 
 ## What it does
 
-`plasma_test.exe` (see `app/main.cpp`) is a model viewer and UI sandbox:
+`plasma_test.exe` (`app/main.cpp`) is a **model + audio viewer** (no player movement / WASD):
 
-- Opens **`data1.db`** — 2857+ `.cub` voxel models
-- Opens **`data3.db`** — PNG textures (HUD icons, UI art)
-- Loads **`gui.plx`** — compiled Plasma widget tree (partial decode)
-- Renders the selected model as colored voxel cubes in 3D
-- Shows a **scrollable model list**, **integer jump field**, toolbar buttons, and the **bottom HUD icon bar**
+| Feature | Details |
+|---------|---------|
+| **3D preview** | Renders `.cub` voxel models as colored cubes; auto-rotating camera |
+| **Model source tabs** | **Model** · **DB** · **Race** · **Items** · **Equip** — five ways to pick what to load |
+| **Model list** | Scrollable list in the left panel; click a row to load |
+| **Icon gallery** | Bottom panel — scrollable grid of **all PNG icons** from `data3.db` (104 in this copy) |
+| **Sound playback** | 93 WAV SFX from `data2.db` via **XAudio2** (descrambled retail blobs) |
+| **Music playback** | OGG tracks from `{gameRoot}/Music/*.ogg` via **stb_vorbis** + XAudio2 |
+| **Retail fonts** | UI text from `resource1.dat`; decorative title from `resource2.dat` |
+| **Registries** | Race / item / equip name lists extracted from decompiled retail init order |
 
-Retail fonts are **not** stored in the databases; text uses system TTF via **stb_truetype** (`PlasmaFont`).
+Shaders load at runtime from `shaders/` (`ui.vert`/`ui.frag`, `model.vert`/`model.frag`).
 
 ---
 
 ## Requirements
 
-- **MSYS2 MinGW64** (`g++`, GLFW, GLEW)
-- Game data files in the working directory (or path passed as argv[1]):
-  - `data1.db`, `data3.db`, `gui.plx`
-  - Optional: `data2.db` (audio), `data4.db` (misc blobs) — not used by the test app yet
+- **MSYS2 MinGW64** (`g++`, GLFW, GLEW, XAudio2)
+- Retail game data in the working directory (or path passed as `argv[1]`):
+
+| File / folder | Required | Purpose |
+|---------------|----------|---------|
+| `data1.db` | Yes | `.cub` voxel models (~2857 keys) |
+| `data2.db` | For audio | Scrambled WAV SFX (93 entries) |
+| `data3.db` | For icons | Scrambled PNG UI icons (104 entries) |
+| `resource1.dat` | For fonts | Block UI TrueType font (renamed `.ttf`) |
+| `resource2.dat` | For fonts | Script/decorative TrueType font (Venice-style) |
+| `Music/` | For music | OGG files on disk (`maintheme.ogg`, `greenlands.ogg`, …) — **not** in DBs |
+| `data4.db` | Optional | Language XML blobs (`dict_en.xml`, `dict_de.xml`) |
+| `gui.plx` | Optional | Compiled Plasma UI (partial decode in engine) |
+
+Copy `Music/` from your Cube World install; it is not embedded in `Cube.exe` or the databases.
 
 ---
 
@@ -33,7 +49,7 @@ Retail fonts are **not** stored in the databases; text uses system TTF via **stb
 
 ```bash
 # From MSYS2 MinGW64 shell
-cd Plasma
+cd "CW Player"
 bash build.sh
 ./plasma_test.exe .
 ```
@@ -43,41 +59,77 @@ Or:
 ```bash
 make -j$(nproc)
 export PATH=/mingw64/bin:$PATH
-./plasma_test.exe .
+./plasma_test.exe /path/to/cube/world/install
 ```
 
-Shaders are loaded at runtime from `shaders/` (`ui.vert`/`ui.frag`, `model.vert`/`model.frag`).
+The single argument is the **game root** — the folder containing `data1.db`, `resource1.dat`, etc.
+
+---
+
+## Test app layout
+
+```
+┌─────────────────┬──────────────────────────────────┐
+│  Side panel     │  3D model preview                │
+│  (280 px)       │  "Cube World" (script font)      │
+│                 │  status line (UI font)           │
+│  Model|DB|Race  │                                  │
+│  Items|Equip    │                                  │
+│  ─ model list   │                                  │
+│  ─ Sound|Music  │                                  │
+│  ─ audio list   │                                  │
+│  [Play selected]│                                  │
+├─────────────────┴──────────────────────────────────┤
+│  Icon gallery — all data3.db PNGs (scrollable)       │
+└────────────────────────────────────────────────────┘
+```
+
+### Controls
+
+| Input | Action |
+|--------|--------|
+| **Model / DB / Race / Items / Equip** | Switch model list source |
+| Click model list row | Load and preview that entry |
+| Mouse wheel on list | Scroll model list |
+| **Sound / Music** | Switch audio list mode |
+| Click audio row + **Play selected** | Play SFX or OGG track |
+| Mouse wheel on icon gallery | Horizontal scroll through icons |
+
+Preview rotates automatically; there is no free-camera or player control.
+
+### Model source tabs
+
+| Tab | Source | Count (approx.) | Notes |
+|-----|--------|-----------------|-------|
+| **Model** | All keys in `data1.db` | ~2857 | Single `.cub` file per entry |
+| **DB** | Creature body prefixes (`*-body.cub`) | varies | Multi-part creatures (body, foot, head, hands) |
+| **Race** | `WorldRaceRegistry.inc` | 154 | Retail race/creature registry names |
+| **Items** | `WorldItems.inc` | 147 | Retail item registry names |
+| **Equip** | `WorldEquipRegistry.inc` | 195 | Weapons, armor, accessories |
+
+`RegistryModelResolver` maps registry names to `data1.db` keys where possible. Coverage is partial — e.g. player races (Elf/Human) have no `-body.cub` in this DB copy; many equip entries lack matching models.
 
 ---
 
 ## Project layout
 
 ```
-Plasma/
-  app/main.cpp          Test application
-  engine/               plasma:: engine (OpenGL port)
-    include/plasma/     Public headers
-    src/                Implementations
-  cube/                 Cube World asset + .cub format code
-  shaders/              GLSL programs
-  third_party/          sqlite3, stb_image, stb_truetype
-  data1.db, data3.db, gui.plx   Retail assets (not in repo)
+CW Player/
+  app/main.cpp              Test viewer (model + audio + UI)
+  engine/                   plasma:: engine (OpenGL port)
+    include/plasma/         Public headers
+    src/                    Implementations
+  cube/                     Cube World game logic + asset code
+    include/cube/           Headers (World, Creature, audio, …)
+    src/                    Implementations + .inc registry data
+  shaders/                  GLSL programs
+  third_party/              sqlite3, stb_image, stb_truetype, stb_vorbis
+  classes/                  Ghidra decompile reference (not linked)
+  tools/                    Python helpers (DB/PLX/registry extraction)
+  data1.db … gui.plx        Retail assets (when copied from install)
+  resource1.dat             Retail UI font (plain TTF renamed)
+  resource2.dat               Retail script font (plain TTF renamed)
 ```
-
----
-
-## Controls (test app)
-
-| Input | Action |
-|--------|--------|
-| Click list row | Load that model |
-| Scroll slider / mouse wheel | Scroll model list |
-| `#` field + Enter | Jump to model index (1-based) |
-| **Prev** / **Next** / **Random** | Change model |
-| **Pause** / **Spin** | Toggle auto-rotation |
-| Arrow keys, Page Up/Down | Prev / next model |
-| **R** | Random model |
-| **Space** | Toggle rotation |
 
 ---
 
@@ -90,11 +142,76 @@ Display (GLFW window)
         ├── OpenGLTexture
         └── OpenGLRenderSurface (FBO)
 
-Widget tree (UI)          Node tree (scene) — stub path
-  ScrollBar                   Shape subclasses
-    ListWidget                GenericShape, MeshShape, …
-    ScrollSlider
+Widget tree (UI)              Node tree (scene)
+  Side panel + bottom gallery     Shape / mesh draw path
+  ListWidget, Button, …
 ```
+
+Audio path:
+
+```
+data2.db ──► WavLoader (descramble) ──► XAudio2 Sound
+Music/*.ogg ──► stb_vorbis ──► XAudio2 Music
+```
+
+Font path:
+
+```
+resource1.dat ──► stb_truetype atlas ──► uiFont() / PlasmaFont (UI slot)
+resource2.dat ──► stb_truetype atlas ──► scriptFont() / ScriptFont
+```
+
+---
+
+## Retail asset files
+
+### Databases (`data*.db`)
+
+| File | Contents | Used by viewer |
+|------|----------|----------------|
+| **`data1.db`** | `.cub` voxel models (`barrel.cub`, `goblin-male-body.cub`, …) | Yes — primary model source |
+| **`data2.db`** | 93 scrambled WAV SFX blobs | Yes — sound list + playback |
+| **`data3.db`** | 104 scrambled PNG icons / UI art | Yes — bottom icon gallery |
+| **`data4.db`** | 2 XML language blobs (`dict_en.xml`, `dict_de.xml`) | Not yet |
+| **`gui.plx`** | Compiled Plasma UI widget stream | Partial PLX decode only |
+
+Blobs in `data2.db` / `data3.db` are **descrambled** at load time (`cube::descrambleBlob`).
+
+### Font files (`resource*.dat`)
+
+Both files in a retail install are **plain TrueType fonts renamed to `.dat`** — not custom multi-font containers (in the Steam copy inspected here).
+
+| File | Role | Technical notes |
+|------|------|-----------------|
+| **`resource1.dat`** | Main block UI font | ~19 KiB, 232 glyphs, bold (700), FontForge-built; full ASCII + Latin-1 + extended Latin |
+| **`resource2.dat`** | Decorative script font | ~15 KiB, 151 glyphs, medium (500); based on classic Mac **Venice** cursive; smart quotes, dashes |
+
+Decompiled `Cube.exe` references `resource1.dat` hundreds of times via `plasma::ScalableFont` / `FontEngine`. **`resource2.dat` does not appear as a string** in the Ghidra exports in this repo (likely loaded indirectly or from UI data).
+
+The viewer loads both via `cube::fonts::init(gameRoot)` → `plasma::initRetailFonts`. Widgets use `uiFont()`; the 3D viewport title uses `scriptFont()`.
+
+Modders replace these by dropping a `.ttf` renamed to `resource1.dat` / `resource2.dat`.
+
+### Music
+
+BGM lives in **`Music/*.ogg`** on disk (e.g. `maintheme.ogg`, `greenlands.ogg`). It is **not** in `data2.db` or embedded in the executable.
+
+---
+
+## Registries and model resolver
+
+Retail init order was extracted from decompiled code into include files:
+
+| File | Entries | Purpose |
+|------|---------|---------|
+| `cube/src/WorldRaceRegistry.inc` | 154 | Creature/race IDs and names |
+| `cube/src/WorldItems.inc` | 147 | Item registry |
+| `cube/src/WorldEquipRegistry.inc` | 195 | Equipment slots (id + subId + name) |
+| `cube/src/WorldRegistryInit.inc` | — | Retail `ItemRegistry` registration order |
+| `cube/src/RegistryModelOverrides.inc` | generated | Name → `data1.db` model prefix map |
+
+`tools/build_registry_model_map.py` regenerates `RegistryModelOverrides.inc`.  
+`cube::RegistryModelResolver` resolves registry names to creature prefixes or equip model keys at runtime.
 
 ---
 
@@ -160,114 +277,107 @@ Widget tree (UI)          Node tree (scene) — stub path
 | **`PopUpButton`** | `Widget.hpp` | Button that toggles a popup child widget. |
 | **`Edit`** | `Widget.hpp` | Text field with optional **filter** (float/integer/unsigned); `onSubmit` callback. |
 | **`ListWidget`** | `Widget.hpp` | Scrollable string list; selection and `scrollOffset`. |
-| **`ScrollButton`** | `Widget.hpp` | Directional scroll repeat button (retail Plasma; removed from test scrollbar). |
+| **`ScrollButton`** | `Widget.hpp` | Directional scroll repeat button. |
 | **`ScrollSlider`** | `Widget.hpp` | Track + thumb; vertical/horizontal; bound to a `ListWidget`. |
 | **`ScrollBar`** | `Widget.hpp` | Composite: **list + vertical `ScrollSlider`** on the right. |
 | **`MemberFunctionConnection<T>`** | `Widget.hpp` | Slot-style C++ member function binding (retail pattern stub). |
 
 ### Fonts
 
-| Class | File | Purpose |
-|--------|------|---------|
+| Class / API | File | Purpose |
+|-------------|------|---------|
 | **`Font`** | `Font.hpp` | Abstract: `lineHeight()`, `drawText()`. |
-| **`PlasmaFont`** | `Font.hpp` | Vector font via **stb_truetype** + system TTF (replaces retail GDI `PlasmaFont`). |
-| **`PixelFont`** | `Font.hpp` | Bitmap atlas font (16×N glyph grid); retail `PixelFont` path. |
-| **`ScalableFont`** | `Font.hpp` | Size-scaled TTF draw (minimal stub; retail has full `FontEngine` cache). |
-| **`FontEngine`** | `Font.hpp` | Named font registry (`load`, `loadPixel`, `defaultFont`). |
+| **`PlasmaFont`** | `Font.hpp` | Vector font via **stb_truetype** + retail `resource*.dat`. |
+| **`ScriptFont`** | `Font.hpp` | Decorative font wrapper (`resource2.dat`). |
+| **`PixelFont`** | `Font.hpp` | Bitmap atlas font (16×N glyph grid). |
+| **`ScalableFont`** | `Font.hpp` | Size-scaled draw from UI or script slot. |
+| **`FontEngine`** | `Font.hpp` | Named font registry (`load`, `loadPixel`, `defaultFont`, `scriptFont`). |
+| **`initRetailFonts`** | `Font.hpp` | Load `resource1.dat` + `resource2.dat` from game root. |
+| **`uiFont()` / `scriptFont()`** | `Font.hpp` | Global accessors used by widgets and the test app. |
 
 ### Input & drawing helpers
 
 | Class | File | Purpose |
 |--------|------|---------|
-| **`UiInput`** | `UiInput.hpp` | GLFW mouse, wheel, keyboard; dispatches clicks, slider drag, `Edit` typing, `Keyable` shortcuts. |
+| **`UiInput`** | `UiInput.hpp` | GLFW mouse, wheel, keyboard; dispatches clicks, slider drag, `Edit` typing. |
 | **`UiDraw`** | `UiDraw.hpp` | `drawSolidQuad`, `drawTexturedQuad` (screen-space NDC quads). |
 | **`Keyable`** | `Keyable.hpp` | Named map of key code → `std::function` handler. |
 
-### Attributes & animation data
+### Attributes, PLX, filters, utilities
 
-| Class | File | Purpose |
-|--------|------|---------|
-| **`Attribute`** | `Attribute.hpp` | Polymorphic attribute base (`clone`, `typeName`). |
-| **`ContinuousAttribute<T>`** | `Attribute.hpp` | Interpolatable scalar/vector (float, Vec2–Vec4, Mat4). |
-| **`ContinuousArrayAttribute<T>`** | `Attribute.hpp` | Keyframe arrays. |
-| **`DiscreteAttribute<T>`** | `Attribute.hpp` | Step/discrete values (int, string, wstring). |
-| **Type aliases** | `Attribute.hpp` | `FloatAttribute`, `IntAttribute`, `Vec4Attribute`, etc. |
-
-### PLX loader (GUI binary)
-
-| Class | File | Purpose |
-|--------|------|---------|
-| **`PlxWidgetDef`** | `PlxLoader.hpp` | Widget type entry from PLX header. |
-| **`PlxNode`** | `PlxLoader.hpp` | Widget tree node: frame, texture, children. |
-| **`PlxStreamReader`** | `PlxLoader.hpp` | Binary stream decoder for compiled PLX blobs. |
-| **`PlxDocument`** | `PlxLoader.hpp` | Load `gui.plx`; parse header/tree; `buildRootWidget()`. |
-
-### Filters (Edit widgets)
-
-| Class | File | Purpose |
-|--------|------|---------|
-| **`FloatFilter`** | `Filters.hpp` | Parse/validate float text. |
-| **`IntegerFilter`** | `Filters.hpp` | Parse/validate signed integer text. |
-| **`UnsignedFloatFilter`** | `Filters.hpp` | Non-negative float. |
-| **`UnsignedIntegerFilter`** | `Filters.hpp` | Non-negative integer. |
-
-### Geometry utilities
-
-| Class | File | Purpose |
-|--------|------|---------|
-| **`Tessellate`** | `Tessellate.hpp` | Ear-clipping 2D triangulation; Catmull-Rom splines (replaces GLU). |
-
-### Exceptions
-
-| Class | File | Purpose |
-|--------|------|---------|
-| **`Exception`** | `Exception.hpp` | Base `std::runtime_error`. |
-| **`InvalidFileFormatException`** | `Exception.hpp` | Bad asset/PLX format. |
-| **`InvalidVersionException`** | `Exception.hpp` | Unsupported file version. |
-| **`InvalidDemoLicenseException`** | `Exception.hpp` | Retail license check (ported for API parity). |
+See headers under `engine/include/plasma/` — `Attribute.hpp`, `PlxLoader.hpp`, `Filters.hpp`, `Tessellate.hpp`, `Exception.hpp` (ported for API parity with decompile).
 
 ---
 
 ## Class reference — `cube::`
 
+### Assets & rendering
+
 | Class / function | File | Purpose |
 |------------------|------|---------|
-| **`descrambleBlob`** | `BlobDescramble.hpp` | XOR/descramble blob payload from SQLite (retail encoding). |
+| **`descrambleBlob`** | `BlobDescramble.hpp` | XOR/descramble blob payload from SQLite. |
 | **`CubModel`** | `Assets.hpp` | Voxel grid: RGB bytes, dimensions, load from blob. |
-| **`CubMeshVertex`** | `Assets.hpp` | One rendered voxel face vertex (pos, normal, color). |
-| **`CubMesh`** | `Assets.hpp` | Triangle mesh built from a model. |
 | **`CubMeshBuilder`** | `Assets.hpp` | Extrudes visible voxel faces into indexed mesh. |
 | **`AssetDatabase`** | `Assets.hpp` | SQLite wrapper: `fetchBlob`, `listKeys` on `data*.db`. |
 | **`ModelCatalog`** | `Assets.hpp` | High-level API over `data1.db` for `.cub` names and meshes. |
-| **`DecodedImage`** | `TextureCatalog.hpp` | CPU-side RGBA PNG decode result. |
 | **`TextureCatalog`** | `TextureCatalog.hpp` | PNG blobs from `data3.db` → GPU textures. |
-| **`GuiHud`** | `GuiHud.hpp` | Bottom bar: skills, crafting, inventory, map, system, help icons. |
+| **`RegistryModelResolver`** | `RegistryModelResolver.hpp` | Maps registry names → model keys / creature prefixes. |
+| **`RetailFonts`** | `RetailFonts.hpp` | Thin wrapper around `plasma::initRetailFonts`. |
+| **`CubeShader` / `Camera`** | `CubeShader.hpp`, `Camera.hpp` | Scene rendering helpers. |
+
+### Audio
+
+| Class / function | File | Purpose |
+|------------------|------|---------|
+| **`WavLoader`** | `WavLoader.hpp` | Parse WAV; descramble path for DB blobs. |
+| **`AudioFileLoader`** | `AudioFileLoader.hpp` | Load OGG/WAV from filesystem; `listMusicTracks()`. |
+| **`audio::Sound`** | `XAudio2Engine.hpp` | One-shot SFX playback. |
+| **`audio::Music`** | `XAudio2Engine.hpp` | Looping OGG music playback. |
+| **`XAudio2Engine`** | `XAudio2Engine.hpp` | Engine init + DB load for `data2.db`. |
+
+### Game logic (ported from decompile)
+
+Headers are grouped in `cube/include/cube/All.hpp`. Compiled into the library but **not all wired into the test viewer**:
+
+| Area | Key classes | Status |
+|------|-------------|--------|
+| **World / terrain** | `World`, `Zone`, `Region`, `Terrain`, `Chunk`, `ChunkBuffer`, `Dungeon`, `House` | Ported |
+| **Entities** | `Creature`, `Controller`, `GameController`, `Sprite`, `SpriteManager` | Ported |
+| **Behaviors** | `WalkPathBehavior`, `LookAtPlayerBehavior`, `SpawnLocationBehavior`, `CombatBehavior`, … | Ported |
+| **Items** | `ItemRegistry` + `.inc` registries | Ported + populated |
+| **UI widgets** | `StartMenuWidget`, `ChatWidget`, `InventoryWidget`, `CharacterStyleWidget`, … | Headers + partial stubs |
+| **Quest / text** | `QuestText`, `QuestTextNode`, `Speech` | Partial |
+| **World info** | `WorldInfo`, `WorldMap` | Partial (threaded loop incomplete) |
+| **Action poses** | `ActionConfig`, `AnimPose`, `PartKind` | Used by viewer for idle pose |
 
 ---
 
-## Asset databases (retail)
+## Tools (`tools/`)
 
-| File | Contents |
-|------|-----------|
-| **`data1.db`** | `.cub` voxel models (keys like `barrel.cub`) |
-| **`data2.db`** | Audio (not used by test app) |
-| **`data3.db`** | PNG textures / HUD icons |
-| **`data4.db`** | Small text/XML blobs |
-| **`gui.plx`** | Compiled Plasma UI widget stream |
-
-Fonts in retail Plasma load from **filesystem** (`fonts/`, `C:\Windows\Fonts\*.ttf`), not from these DBs.
+| Script | Purpose |
+|--------|---------|
+| `inspect_resource_dat.py` | Inspect `resource1.dat` / `resource2.dat` (TTF headers, tables, coverage) |
+| `build_registry_model_map.py` | Regenerate `RegistryModelOverrides.inc` |
+| `extract_world_registry.py` | Extract race registry from decompile |
+| `extract_world_items.py` / `extract_world_equip.py` | Extract item/equip registries |
+| `extract_action_config.py` | Extract animation pose blobs |
+| `probe_dbs.py` / `probe_models.py` | Probe DB keys and model availability |
+| `probe_registry_models.py` | Check registry → model coverage |
+| `compare_icons.py` | Compare icon sets |
+| `plx_stream_decoder.py`, `parse_plx.py`, … | PLX / GUI binary analysis |
 
 ---
 
 ## Decompiled reference (`classes/`)
 
-The `classes/` folder contains **Ghidra exports** of the original D3D9 Plasma engine (`plasma__Button.cpp`, `plasma__ScalableFont.cpp`, etc.). These files are **not compiled** into `plasma_test.exe`; they are kept for reverse-engineering parity when porting behavior.
+The `classes/` folder contains **Ghidra exports** of the original D3D9 Plasma engine and Cube game code (`plasma__Button.cpp`, `plasma__ScalableFont.cpp`, `cube__World.cpp`, etc.). These files are **not compiled** into `plasma_test.exe`; they are reference for reverse-engineering parity.
 
-Notable retail-only classes not yet fully ported:
+Retail-only pieces not fully ported to OpenGL:
 
-- `plasma::ScalableFont` — full font cache + `FontEngine` integration
-- `plasma::D3D9RenderSurface` — replaced by `OpenGLRenderSurface`
-- Full `plasma::Button` PLX attribute binding (~560-byte layout)
+- Full `plasma::ScalableFont` font cache (retail GDI / file-container path)
+- `plasma::D3D9RenderSurface` → replaced by `OpenGLRenderSurface`
+- Full PLX widget attribute binding (~560-byte `Button` layout)
+- Complete `gui.plx` runtime widget tree
 
 ---
 
@@ -275,17 +385,30 @@ Notable retail-only classes not yet fully ported:
 
 | Area | Status |
 |------|--------|
-| `.cub` voxel rendering | Working |
-| OpenGL UI quads + text (TTF) | Working |
-| Model list + `ScrollSlider` | Working |
-| HUD icon bar from `data3.db` | Working |
-| `gui.plx` compiled stream | Partial (Seal button + children) |
+| `.cub` voxel rendering + auto-rotate preview | Working |
+| Model tabs (Model / DB / Race / Items / Equip) | Working |
+| Registry lists + model resolver | Working (partial model coverage) |
+| OpenGL UI quads + retail fonts | Working |
+| Icon gallery (all `data3.db` PNGs) | Working |
+| SFX playback (`data2.db` + XAudio2) | Working |
+| Music playback (`Music/*.ogg` + stb_vorbis) | Working (requires copied `Music/` folder) |
+| Multi-part creature loading (`-body`, `-foot`, …) | Working |
+| `ItemRegistry` + retail `.inc` data | Working |
+| World / terrain / behavior classes | Ported, not used by viewer |
+| `gui.plx` compiled stream | Partial decode only |
 | Full retail widget fidelity | In progress |
-| `ScalableFont` / `FontEngine` cache | Stub only |
-| Audio (`data2.db`) | Not started |
+| `data4.db` language XML | Not used |
+| Retail `ScalableFont` file-container loader | Replaced by stb + plain TTF `.dat` files |
+
+### Known gaps
+
+- Many registry entries have no matching `.cub` in `data1.db` (player races, some equip).
+- Star rating icons (`star1.png`–`star4.png`) may be missing from some `data3.db` copies.
+- `resource2.dat` load path not traced in decompiled strings; viewer loads it by filename convention.
+- Music is not bundled — copy `Music/` from your install.
 
 ---
 
 ## License
 
-Game assets (`data*.db`, `gui.plx`) are **Cube World retail data** — use only if you own the game. Engine port code in `engine/`, `cube/`, and `app/` is written for this project; third-party: sqlite3, stb, GLFW, GLEW.
+Game assets (`data*.db`, `gui.plx`, `resource*.dat`, `Music/`) are **Cube World retail data** — use only if you own the game. Engine port code in `engine/`, `cube/`, and `app/` is written for this project; third-party: sqlite3, stb, GLFW, GLEW.

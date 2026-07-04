@@ -37,6 +37,8 @@ void Widget::onClick(float, float) {}
 
 void Widget::onDrag(float, float) {}
 
+bool Widget::onMouseWheel(float) { return false; }
+
 bool Widget::dispatchClick(float x, float y) {
     if (!visible_) {
         return false;
@@ -103,9 +105,8 @@ void Button::draw(Engine& engine, int screenW, int screenH) {
     }
     const std::wstring caption = buttonCaption(*this);
     if (!caption.empty()) {
-        PlasmaFont font;
-        font.drawText(engine, caption, bounds_.x + 8.f, bounds_.y + 6.f, {0.95f, 0.97f, 1.f, 1.f},
-                      screenW, screenH);
+        uiFont().drawText(engine, caption, bounds_.x + 8.f, bounds_.y + 6.f, {0.95f, 0.97f, 1.f, 1.f},
+                          screenW, screenH);
     }
     for (Widget* c : children_) {
         if (c) {
@@ -193,10 +194,9 @@ void Edit::draw(Engine& engine, int screenW, int screenH) {
     }
     const std::wstring& shown = !text.empty() ? text : hint;
     if (!shown.empty()) {
-        PlasmaFont font;
         const Vec4 color = text.empty() ? Vec4{0.55f, 0.58f, 0.65f, 1.f}
                                         : Vec4{0.92f, 0.94f, 0.98f, 1.f};
-        font.drawText(engine, shown, bounds_.x + 6.f, bounds_.y + 4.f, color, screenW, screenH);
+        uiFont().drawText(engine, shown, bounds_.x + 6.f, bounds_.y + 4.f, color, screenW, screenH);
     }
 }
 
@@ -235,7 +235,6 @@ void ListWidget::draw(Engine& engine, int screenW, int screenH) {
         return;
     }
     drawSolidQuad(engine, bounds_, screenW, screenH, {0.18f, 0.2f, 0.24f, 0.95f});
-    PlasmaFont font;
     const int visibleRows = visibleRowCount();
     float y = bounds_.y + 4.f;
     for (int i = 0; i < visibleRows; ++i) {
@@ -251,8 +250,8 @@ void ListWidget::draw(Engine& engine, int screenW, int screenH) {
         const size_t maxChars = static_cast<size_t>((row.w - 8.f) / 7.f);
         const std::string clipped = item.substr(0, maxChars);
         const std::wstring wtext(clipped.begin(), clipped.end());
-        font.drawText(engine, wtext, row.x + 4.f, row.y + 3.f, {0.92f, 0.94f, 0.98f, 1.f}, screenW,
-                      screenH);
+        uiFont().drawText(engine, wtext, row.x + 4.f, row.y + 3.f, {0.92f, 0.94f, 0.98f, 1.f}, screenW,
+                          screenH);
         y += rowHeight;
     }
 }
@@ -285,10 +284,9 @@ void ScrollButton::draw(Engine& engine, int screenW, int screenH) {
                : direction == Direction::Down  ? "v"
                : direction == Direction::Left  ? "<"
                                                : ">");
-    PlasmaFont font;
     const std::wstring wtext(caption.begin(), caption.end());
-    font.drawText(engine, wtext, bounds_.x + bounds_.w * 0.35f, bounds_.y + 4.f, {0.95f, 0.97f, 1.f, 1.f},
-                  screenW, screenH);
+    uiFont().drawText(engine, wtext, bounds_.x + bounds_.w * 0.35f, bounds_.y + 4.f, {0.95f, 0.97f, 1.f, 1.f},
+                      screenW, screenH);
 }
 
 void ScrollButton::onClick(float x, float y) {

@@ -10,6 +10,17 @@
 
 namespace plasma {
 
+class Font;
+
+enum class RetailFontSlot { Ui, Script };
+
+bool initRetailFonts(const std::string& assetRoot);
+const std::string& retailFontRoot();
+bool retailFontsReady(RetailFontSlot slot = RetailFontSlot::Ui);
+
+Font& uiFont();
+Font& scriptFont();
+
 class Font : public NamedObject {
 public:
     ~Font() override = default;
@@ -40,29 +51,48 @@ private:
 
 class PlasmaFont : public Font {
 public:
+    explicit PlasmaFont(RetailFontSlot slot = RetailFontSlot::Ui);
     float lineHeight() const override;
     float charWidth() const override;
     void drawText(Engine& engine, const std::wstring& text, float x, float y, const Vec4& color,
                   int screenW, int screenH) override;
+
+private:
+    RetailFontSlot slot_{RetailFontSlot::Ui};
 };
 
 class ScalableFont : public Font {
 public:
-    explicit ScalableFont(float size = 16.f);
+    ScalableFont(float size = 16.f, RetailFontSlot slot = RetailFontSlot::Ui);
     float lineHeight() const override { return size_; }
     void drawText(Engine& engine, const std::wstring& text, float x, float y, const Vec4& color,
                   int screenW, int screenH) override;
 
 private:
     float size_{16.f};
+    RetailFontSlot slot_{RetailFontSlot::Ui};
+};
+
+class ScriptFont : public Font {
+public:
+    ScriptFont();
+    float lineHeight() const override;
+    float charWidth() const override;
+    void drawText(Engine& engine, const std::wstring& text, float x, float y, const Vec4& color,
+                  int screenW, int screenH) override;
+
+private:
+    PlasmaFont font_{RetailFontSlot::Script};
 };
 
 class FontEngine : public Object {
 public:
+    bool init(const std::string& assetRoot);
     Font* load(const std::string& name, const uint8_t* data, size_t size);
     Font* loadPixel(const std::string& name, Texture* atlas, int glyphW = 8, int glyphH = 12);
     Font* get(const std::string& name) const;
     Font* defaultFont();
+    Font* scriptFont();
 
 private:
     std::unordered_map<std::string, std::unique_ptr<Font>> fonts_;
